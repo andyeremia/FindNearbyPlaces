@@ -9,10 +9,16 @@ import androidx.fragment.app.FragmentActivity;
 import android.Manifest;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.location.Address;
+import android.location.Geocoder;
 import android.location.Location;
 
 import android.os.Build;
 import android.os.Bundle;
+import android.text.TextUtils;
+import android.util.Log;
+import android.view.View;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -30,6 +36,9 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+import java.io.IOException;
+import java.util.List;
+
 public class MapsActivity extends FragmentActivity implements
         OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks,
@@ -42,6 +51,8 @@ public class MapsActivity extends FragmentActivity implements
     private Location lastLocation;
     private Marker currentUserLocationMarker;
     private static final int requestUserLocationCode = 99;
+    private double latitude, longitude;
+    private int proximityRadius = 10000;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,7 +69,97 @@ public class MapsActivity extends FragmentActivity implements
         mapFragment.getMapAsync(this);
     }
 
+    public void onClick(View v){
+        String hospital = "hospital", school = "school", restaurant = "restaurant";
+        Object transferData[] = new Object[2]; //mMap + url
+        GetNearbyPlaces getNearbyPlaces = new GetNearbyPlaces();
 
+
+        switch (v.getId()){
+            case R.id.search_address:
+                EditText addressField = (EditText) findViewById(R.id.location_search);
+                String address = addressField.getText().toString();
+
+                List<Address> addressList = null;
+                MarkerOptions userMarkerOptions = new MarkerOptions();
+
+                if(!TextUtils.isEmpty(address)){
+                    Geocoder geocoder = new Geocoder(this);
+
+                    try {
+                        addressList = geocoder.getFromLocationName(address, 6);
+
+                        if(addressList != null) {
+                            for (int i = 0; i<addressList.size(); i++){
+                                Address userAddress = addressList.get(i);
+                                LatLng latLng = new LatLng(userAddress.getLatitude(), userAddress.getLongitude());
+
+                                userMarkerOptions.position(latLng);
+                                userMarkerOptions.title(address);
+                                userMarkerOptions.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE));
+
+                                mMap.addMarker(userMarkerOptions);
+                                mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
+                                mMap.animateCamera(CameraUpdateFactory.zoomTo(10));
+
+                            }
+                        } else {
+                            Toast.makeText(this, "Location not found!", Toast.LENGTH_SHORT).show();
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    Toast.makeText(this, "Please write any location name", Toast.LENGTH_SHORT).show();
+                }
+                break;
+            case R.id.hospitals_nearby:
+                mMap.clear();
+                String url = getUrl(latitude, longitude, hospital);
+                transferData[0] = mMap;
+                transferData[1] = url;
+
+                getNearbyPlaces.execute(transferData);
+                Toast.makeText(this, "Searching for nearby hospitals...", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Showing nearby hospitals...", Toast.LENGTH_SHORT).show();
+                break;
+
+            case R.id.schools_nearby:
+                mMap.clear();
+                url = getUrl(latitude, longitude, school);
+                transferData[0] = mMap;
+                transferData[1] = url;
+
+                getNearbyPlaces.execute(transferData);
+                Toast.makeText(this, "Searching for nearby schools...", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Showing nearby schools...", Toast.LENGTH_SHORT).show();
+                break;
+
+            case R.id.restaurants_nearby:
+                mMap.clear();
+                url = getUrl(latitude, longitude, restaurant);
+                transferData[0] = mMap;
+                transferData[1] = url;
+
+                getNearbyPlaces.execute(transferData);
+                Toast.makeText(this, "Searching for nearby restaurants...", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Showing nearby restaurants...", Toast.LENGTH_SHORT).show();
+                break;
+        }
+    }
+
+    private String getUrl(double latitude, double longitude, String nearbyPlace) {
+        StringBuilder googleUrl = new StringBuilder("https://maps.googleapis.com/maps/api/place/nearbysearch/json?");
+        googleUrl.append("location=" + latitude + ", " + longitude);
+        googleUrl.append("&radius= " + proximityRadius);
+        googleUrl.append("&type= " + nearbyPlace);
+        googleUrl.append("&sensor=true");
+        googleUrl.append("&key =" + "AIzaSyCSQ6EELtx3ZJPWOcxqsYOIkc3gzLXdPS0");
+
+        Log.d("MapsActivity", "url = " + googleUrl.toString());
+
+        return googleUrl.toString();
+    }
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
@@ -117,6 +218,8 @@ public class MapsActivity extends FragmentActivity implements
 
     @Override
     public void onLocationChanged(Location location) {
+        latitude = location.getLatitude();
+        longitude = location.getLongitude();
         lastLocation = location;
 
         if(currentUserLocationMarker != null){      //VERIFICA DACA EXISTA UN MARKER DEJA PE HARTA
